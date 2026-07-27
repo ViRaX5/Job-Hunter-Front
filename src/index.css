@@ -224,9 +224,3 @@ body {
   color: white;
   font-weight: 600;
 }
-
-.badge-nvidia { background: #76b900; }
-.badge-amazon { background: #e8871e; }
-.badge-checkpoint { background: #d0271d; }
-.badge-google { background: #4285f4; }
-.badge-mobileye { background: #6a3fbf; }

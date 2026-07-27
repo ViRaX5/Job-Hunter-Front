@@ -1,14 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { fetchJobs, setJobStatus, refreshJobs } from './api.js';
 
-const COMPANIES = [
-  { key: 'nvidia', label: 'NVIDIA' },
-  { key: 'amazon', label: 'Amazon' },
-  { key: 'checkpoint', label: 'Check Point' },
-  { key: 'google', label: 'Google' },
-  { key: 'mobileye', label: 'Mobileye' },
-];
-
 const STATUS_FILTERS = [
   { key: '', label: 'All' },
   { key: 'none', label: 'New' },
@@ -16,6 +8,39 @@ const STATUS_FILTERS = [
   { key: 'applied', label: 'Applied' },
   { key: 'not_applied', label: 'Not Applied' },
 ];
+
+// Optional prettier display names for known company keys. Anything not
+// listed here still works fine - it just falls back to auto-capitalizing
+// the raw key, so a brand-new connector needs zero frontend changes.
+const COMPANY_LABELS = {
+  nvidia: 'NVIDIA',
+  checkpoint: 'Check Point',
+};
+
+function companyLabel(key) {
+  return COMPANY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+// Known companies keep their real brand color; anything else falls back to
+// a deterministic hash-generated color, so a brand-new connector still gets
+// a distinct, stable badge with no CSS/JS changes required.
+const COMPANY_COLORS = {
+  nvidia: '#76b900',
+  amazon: '#e8871e',
+  checkpoint: '#d0271d',
+  google: '#4285f4',
+  mobileye: '#6a3fbf',
+};
+
+function companyColor(key) {
+  if (COMPANY_COLORS[key]) return COMPANY_COLORS[key];
+  let hash = 0;
+  for (let i = 0; i < key.length; i += 1) {
+    hash = key.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 40%)`;
+}
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -29,7 +54,11 @@ function timeAgo(iso) {
 }
 
 export default function App() {
-  const [jobs, setJobs] = useState([]);
+  // Holds every job matching the current status/search filters, across all
+  // companies - company filtering itself happens client-side below, so the
+  // full set of company chips (and their counts) stay visible and accurate
+  // no matter which company is currently selected.
+  const [allJobs, setAllJobs] = useState([]);
   const [company, setCompany] = useState('');
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
@@ -41,14 +70,14 @@ export default function App() {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchJobs({ company, status, q });
-      setJobs(data);
+      const data = await fetchJobs({ status, q });
+      setAllJobs(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [company, status, q]);
+  }, [status, q]);
 
   useEffect(() => {
     const handle = setTimeout(load, q ? 300 : 0);
@@ -56,7 +85,7 @@ export default function App() {
   }, [load, q]);
 
   const handleStatusChange = async (id, newStatus) => {
-    setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: newStatus } : j)));
+    setAllJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: newStatus } : j)));
     try {
       await setJobStatus(id, newStatus);
     } catch (err) {
@@ -78,11 +107,17 @@ export default function App() {
     }
   };
 
-  const counts = useMemo(() => {
-    const c = {};
-    for (const j of jobs) c[j.company] = (c[j.company] || 0) + 1;
-    return c;
-  }, [jobs]);
+  const { companies, counts } = useMemo(() => {
+    const counts = {};
+    for (const j of allJobs) counts[j.company] = (counts[j.company] || 0) + 1;
+    const companies = Object.keys(counts).sort();
+    return { companies, counts };
+  }, [allJobs]);
+
+  const jobs = useMemo(
+    () => (company ? allJobs.filter((j) => j.company === company) : allJobs),
+    [allJobs, company]
+  );
 
   return (
     <div className="app">
@@ -95,14 +130,16 @@ export default function App() {
 
       <div className="filters">
         <div className="filter-group">
-          {[{ key: '', label: 'All companies' }, ...COMPANIES].map((c) => (
+          <button className={`chip ${company === '' ? 'chip-active' : ''}`} onClick={() => setCompany('')}>
+            All companies
+          </button>
+          {companies.map((key) => (
             <button
-              key={c.key}
-              className={`chip ${company === c.key ? 'chip-active' : ''}`}
-              onClick={() => setCompany(c.key)}
+              key={key}
+              className={`chip ${company === key ? 'chip-active' : ''}`}
+              onClick={() => setCompany(key)}
             >
-              {c.label}
-              {c.key && counts[c.key] ? ` (${counts[c.key]})` : ''}
+              {companyLabel(key)} ({counts[key]})
             </button>
           ))}
         </div>
@@ -137,7 +174,9 @@ export default function App() {
           {jobs.map((job) => (
             <li key={job.id} className="job-card">
               <div className="job-main">
-                <span className={`badge badge-${job.company}`}>{job.company}</span>
+                <span className="badge" style={{ background: companyColor(job.company) }}>
+                  {companyLabel(job.company)}
+                </span>
                 <a href={job.url} target="_blank" rel="noreferrer" className="job-title">
                   {job.title}
                 </a>
