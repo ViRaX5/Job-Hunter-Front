@@ -1,4 +1,7 @@
-const BASE = '/api/jobs';
+// In dev, relative '/api/jobs' goes through Vite's proxy to localhost:3001.
+// In production (GitHub Pages), there's no proxy - VITE_API_URL must point
+// at wherever the backend is actually reachable (e.g. https://your-tailscale-name:3001).
+const BASE = `${import.meta.env.VITE_API_URL || ''}/api/jobs`;
 
 export async function fetchJobs({ company, status, q } = {}) {
   const params = new URLSearchParams();
