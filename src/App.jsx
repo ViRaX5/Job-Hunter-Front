@@ -15,6 +15,11 @@ const STATUS_FILTERS = [
 const COMPANY_LABELS = {
   nvidia: 'NVIDIA',
   checkpoint: 'Check Point',
+  appsflyer: 'AppsFlyer',
+  jfrog: 'JFrog',
+  playperfect: 'Play Perfect',
+  solaredge: 'SolarEdge',
+  moonactive: 'Moon Active',
 };
 
 function companyLabel(key) {
