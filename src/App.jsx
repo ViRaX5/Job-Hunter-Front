@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { fetchJobs, setJobStatus, refreshJobs } from './api.js';
+import { fetchJobs, setJobStatus, refreshJobs, fetchCompanies } from './api.js';
 
 const STATUS_FILTERS = [
   { key: '', label: 'All' },
@@ -64,6 +64,10 @@ export default function App() {
   // full set of company chips (and their counts) stay visible and accurate
   // no matter which company is currently selected.
   const [allJobs, setAllJobs] = useState([]);
+  // Every company the backend is polling, regardless of whether it
+  // currently has an open posting - so the chip list doesn't hide
+  // companies that just happen to have zero matches right now.
+  const [allCompanyKeys, setAllCompanyKeys] = useState([]);
   const [company, setCompany] = useState('');
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
@@ -88,6 +92,12 @@ export default function App() {
     const handle = setTimeout(load, q ? 300 : 0);
     return () => clearTimeout(handle);
   }, [load, q]);
+
+  useEffect(() => {
+    fetchCompanies()
+      .then(setAllCompanyKeys)
+      .catch((err) => setError(err.message));
+  }, []);
 
   const handleStatusChange = async (id, newStatus) => {
     setAllJobs((prev) => prev.map((j) => (j.id === id ? { ...j, status: newStatus } : j)));
@@ -115,9 +125,11 @@ export default function App() {
   const { companies, counts } = useMemo(() => {
     const counts = {};
     for (const j of allJobs) counts[j.company] = (counts[j.company] || 0) + 1;
-    const companies = Object.keys(counts).sort();
+    // Union with allCompanyKeys, not just Object.keys(counts) - a company
+    // with zero current matches should still get a filter chip.
+    const companies = Array.from(new Set([...allCompanyKeys, ...Object.keys(counts)])).sort();
     return { companies, counts };
-  }, [allJobs]);
+  }, [allJobs, allCompanyKeys]);
 
   const jobs = useMemo(
     () => (company ? allJobs.filter((j) => j.company === company) : allJobs),
@@ -144,7 +156,7 @@ export default function App() {
               className={`chip ${company === key ? 'chip-active' : ''}`}
               onClick={() => setCompany(key)}
             >
-              {companyLabel(key)} ({counts[key]})
+              {companyLabel(key)} ({counts[key] || 0})
             </button>
           ))}
         </div>
